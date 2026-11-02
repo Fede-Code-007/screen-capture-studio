@@ -1,15 +1,18 @@
 export async function getScreenStream(withSystemAudio: boolean): Promise<MediaStream> {
-  return navigator.mediaDevices.getDisplayMedia({
+  const options = {
     video: { frameRate: 30 },
     audio: withSystemAudio
       ? {
-          // Para audio del sistema conviene no procesarlo como si fuera voz
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
         }
       : false,
-  })
+    // Pista para Chrome: ofrecer el audio del sistema en el selector
+    ...(withSystemAudio ? { systemAudio: 'include' } : {}),
+  } as DisplayMediaStreamOptions
+
+  return navigator.mediaDevices.getDisplayMedia(options)
 }
 
 export async function getMicrophoneStream(deviceId?: string): Promise<MediaStream> {

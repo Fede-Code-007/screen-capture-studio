@@ -19,6 +19,8 @@ import type { Recording } from '@/types/recorder.types'
 
 function App() {
   const [systemAudio, setSystemAudio] = useState(true)
+  const [systemVolume, setSystemVolume] = useState(1)
+  const [micVolume, setMicVolume] = useState(1)
 
   const {
     stream,
@@ -42,6 +44,7 @@ function App() {
   const { status, recordingBlob, start, pause, resume, stop, clear } = useMediaRecorder(
     stream,
     micStream,
+    { system: systemVolume, mic: micVolume },
   )
   const { seconds, reset } = useRecordingTimer(status)
 
@@ -148,10 +151,14 @@ function App() {
             systemAudioLocked={captureStatus !== 'idle'}
             microphone={micEnabled}
             onMicrophoneChange={setMicEnabled}
-            microphoneLocked={status !== 'inactive'}
+            microphoneLocked={false}
             devices={devices}
             deviceId={deviceId}
             onDeviceChange={setDeviceId}
+            systemVolume={systemVolume}
+            onSystemVolumeChange={setSystemVolume}
+            micVolume={micVolume}
+            onMicVolumeChange={setMicVolume}
           />
 
           {error && <p className="text-sm text-destructive">{error}</p>}
