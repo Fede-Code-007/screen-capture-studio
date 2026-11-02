@@ -1,19 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import fixWebmDuration from 'webm-duration-fix'
+import { createRecordingStream, type RecordingSource } from '@/services/audio.service'
 import { getSupportedMimeType } from '@/utils/getSupportedMimeType'
 import type { RecordingStatus } from '@/types/recorder.types'
-import fixWebmDuration from 'webm-duration-fix'
 
-export function useMediaRecorder(stream: MediaStream | null) {
+export function useMediaRecorder(
+  screenStream: MediaStream | null,
+  micStream: MediaStream | null,
+) {
   const [status, setStatus] = useState<RecordingStatus>('inactive')
   const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
+  const sourceRef = useRef<RecordingSource | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
   const start = useCallback(() => {
-    if (!stream) return
+    if (!screenStream) return
+
+    // Video de la pantalla + audio mezclado (si hay)
+    const source = createRecordingStream(screenStream, micStream)
+    sourceRef.current = source
 
     const mimeType = getSupportedMimeType()
-    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+    const recorder = new MediaRecorder(source.stream, mimeType ? { mimeType } : undefined)
 
     chunksRef.current = []
     setRecordingBlob(null)
@@ -23,26 +32,29 @@ export function useMediaRecorder(stream: MediaStream | null) {
     }
 
     recorder.onstop = async () => {
-    let blob = new Blob(chunksRef.current, { type: recorder.mimeType })
+      // Ya llegaron todos los fragmentos: liberamos el AudioContext
+      sourceRef.current?.close()
+      sourceRef.current = null
 
-    // Solo WebM necesita el arreglo de duración
-    if (blob.type.includes('webm')) {
+      let blob = new Blob(chunksRef.current, { type: recorder.mimeType })
+
+      if (blob.type.includes('webm')) {
         try {
-        blob = await fixWebmDuration(blob)
+          blob = await fixWebmDuration(blob)
         } catch {
-        // Si falla, usamos el blob original sin corregir
+          // Si falla, usamos el blob original
         }
+      }
+
+      setRecordingBlob(blob)
+      setStatus('inactive')
+      recorderRef.current = null
     }
 
-    setRecordingBlob(blob)
-    setStatus('inactive')
-    recorderRef.current = null
-    }
-
-    recorder.start(1000) // entrega un fragmento cada 1 segundo
+    recorder.start(1000)
     recorderRef.current = recorder
     setStatus('recording')
-  }, [stream])
+  }, [screenStream, micStream])
 
   const pause = useCallback(() => {
     if (recorderRef.current?.state === 'recording') {
@@ -64,10 +76,10 @@ export function useMediaRecorder(stream: MediaStream | null) {
     }
   }, [])
 
-  // Si el stream desaparece (el usuario deja de compartir), cerramos la grabación
+  // Si la pantalla deja de compartirse, cerramos la grabación
   useEffect(() => {
-    if (!stream) stop()
-  }, [stream, stop])
+    if (!screenStream) stop()
+  }, [screenStream, stop])
 
   // Limpieza al desmontar
   useEffect(() => {
