@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Download, Monitor, Square } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Download, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { RecorderPreview } from '@/components/recorder/RecorderPreview'
@@ -13,6 +13,9 @@ import { downloadBlob } from '@/services/download.service'
 import { buildFileName } from '@/utils/fileName'
 import { formatFileSize } from '@/utils/formatFileSize'
 import { formatTime } from '@/utils/formatTime'
+import { RecordingsList } from '@/components/recorder/RecordingsList'
+import { useRecordingsHistory } from '@/hooks/useRecordingsHistory'
+import type { Recording } from '@/types/recorder.types'
 
 function App() {
   const [systemAudio, setSystemAudio] = useState(true)
@@ -36,8 +39,29 @@ function App() {
     error: micError,
   } = useAudioCapture()
 
-  const { status, recordingBlob, start, pause, resume, stop } = useMediaRecorder(stream, micStream)
+  const { status, recordingBlob, start, pause, resume, stop, clear } = useMediaRecorder(
+    stream,
+    micStream,
+  )
   const { seconds, reset } = useRecordingTimer(status)
+
+  const {
+    recordings,
+    loading: historyLoading,
+    error: historyError,
+    add: addRecording,
+    remove: removeRecording,
+  } = useRecordingsHistory()
+
+  // Guardamos la duración en un ref para leerla al terminar la grabación
+  // sin que el efecto de guardado dependa de ella
+  const secondsRef = useRef(0)
+  useEffect(() => {
+    secondsRef.current = seconds
+  }, [seconds])
+
+  // Evita guardar dos veces el mismo archivo (React StrictMode ejecuta los efectos dos veces en desarrollo)
+  const savedBlobRef = useRef<Blob | null>(null)
 
   const error = captureError ?? micError
 
@@ -53,9 +77,38 @@ function App() {
     }
   }, [recordingUrl])
 
-  const handleStart = () => {
+  // Cuando la grabación termina y el archivo ya existe, dejamos de compartir pantalla
+  useEffect(() => {
+    if (recordingBlob) stopCapture()
+  }, [recordingBlob, stopCapture])
+
+  // Cuando aparece una grabación nueva, la guardamos en el historial
+  useEffect(() => {
+    if (!recordingBlob || savedBlobRef.current === recordingBlob) return
+    savedBlobRef.current = recordingBlob
+
+    const now = new Date()
+    void addRecording({
+      id: crypto.randomUUID(),
+      name: buildFileName(recordingBlob.type, now),
+      createdAt: now.getTime(),
+      duration: secondsRef.current,
+      size: recordingBlob.size,
+      mimeType: recordingBlob.type,
+      blob: recordingBlob,
+    })
+  }, [recordingBlob, addRecording])
+
+  // Compartir pantalla + empezar a grabar, todo en un click
+  const handleStart = async () => {
     reset()
-    start()
+    const screenStream = await startCapture({ systemAudio })
+    if (screenStream) start(screenStream)
+  }
+
+  const handleNewRecording = () => {
+    clear()
+    reset()
   }
 
   const handleDownload = () => {
@@ -63,8 +116,18 @@ function App() {
     downloadBlob(recordingBlob, buildFileName(recordingBlob.type))
   }
 
+  const handleDownloadFromHistory = (recording: Recording) => {
+    downloadBlob(recording.blob, recording.name)
+  }
+
+  const handleDeleteFromHistory = (recording: Recording) => {
+    if (window.confirm('¿Eliminar esta grabación? No se puede deshacer.')) {
+      void removeRecording(recording.id)
+    }
+  }
+
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
+    <main className="flex min-h-screen flex-col items-center gap-6 p-6">
       <Card className="w-full max-w-3xl">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Screen Recorder</CardTitle>
@@ -77,7 +140,7 @@ function App() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <RecorderPreview stream={stream} />
+          <RecorderPreview stream={stream} recordingUrl={recordingUrl} />
 
           <AudioSettings
             systemAudio={systemAudio}
@@ -92,58 +155,43 @@ function App() {
           />
 
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {historyError && <p className="text-sm text-destructive">{historyError}</p>}
           {audioWarning && (
             <p className="text-sm text-amber-600 dark:text-amber-400">{audioWarning}</p>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            {captureStatus !== 'active' ? (
-              <Button
-                onClick={() => startCapture({ systemAudio })}
-                disabled={captureStatus === 'requesting'}
-              >
-                <Monitor className="size-4" />
-                {captureStatus === 'requesting' ? 'Esperando...' : 'Compartir pantalla'}
+          {recordingBlob ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={handleDownload}>
+                <Download className="size-4" />
+                Descargar
               </Button>
-            ) : (
-              <>
-                <RecorderControls
-                  status={status}
-                  canRecord={captureStatus === 'active'}
-                  onStart={handleStart}
-                  onPause={pause}
-                  onResume={resume}
-                  onStop={stop}
-                />
-                {status === 'inactive' && (
-                  <Button variant="outline" onClick={stopCapture}>
-                    <Square className="size-4" />
-                    Dejar de compartir
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
-
-          {recordingUrl && recordingBlob && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-medium">
-                  Tu grabación
-                  <span className="ml-2 font-normal text-muted-foreground">
-                    {formatFileSize(recordingBlob.size)}
-                  </span>
-                </h2>
-                <Button size="sm" onClick={handleDownload}>
-                  <Download className="size-4" />
-                  Descargar
-                </Button>
-              </div>
-              <video src={recordingUrl} controls className="w-full rounded-lg border" />
+              <Button variant="outline" onClick={handleNewRecording}>
+                <RotateCcw className="size-4" />
+                Grabar nuevo video
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {formatFileSize(recordingBlob.size)}
+              </span>
             </div>
+          ) : (
+            <RecorderControls
+              status={status}
+              isStarting={captureStatus === 'requesting'}
+              onStart={handleStart}
+              onPause={pause}
+              onResume={resume}
+              onStop={stop}
+            />
           )}
         </CardContent>
       </Card>
+      <RecordingsList
+        recordings={recordings}
+        loading={historyLoading}
+        onDownload={handleDownloadFromHistory}
+        onDelete={handleDeleteFromHistory}
+      />
     </main>
   )
 }

@@ -22,7 +22,7 @@ export function useScreenCapture() {
   }, [])
 
   const start = useCallback(
-    async ({ systemAudio }: StartOptions) => {
+    async ({ systemAudio }: StartOptions): Promise<MediaStream | null> => {
       stop()
       setError(null)
       setStatus('requesting')
@@ -34,7 +34,6 @@ export function useScreenCapture() {
         // Si el usuario toca "Dejar de compartir" en el navegador
         newStream.getVideoTracks()[0].addEventListener('ended', stop)
 
-        // Pedir audio no garantiza recibirlo: depende del navegador y de lo que se elija
         if (systemAudio && newStream.getAudioTracks().length === 0) {
           setAudioWarning(
             'No se compartió el audio del sistema. Marcá la casilla de audio en el selector del navegador (no está disponible al compartir una ventana).',
@@ -43,6 +42,7 @@ export function useScreenCapture() {
 
         setStream(newStream)
         setStatus('active')
+        return newStream
       } catch (err) {
         setStatus('idle')
         if (err instanceof DOMException && err.name === 'NotAllowedError') {
@@ -50,6 +50,7 @@ export function useScreenCapture() {
         } else {
           setError('No se pudo iniciar la captura de pantalla.')
         }
+        return null
       }
     },
     [stop],

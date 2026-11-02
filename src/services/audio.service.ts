@@ -24,6 +24,7 @@ export function createRecordingStream(
   }
 
   const audioContext = new AudioContext()
+  if (audioContext.state === 'suspended') void audioContext.resume()
   const destination = audioContext.createMediaStreamDestination()
 
   audioSources.forEach((source) => {

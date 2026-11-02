@@ -1,10 +1,10 @@
-import { Circle, Pause, Play, Square } from 'lucide-react'
+import { Circle, Loader2, Pause, Play, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { RecordingStatus } from '@/types/recorder.types'
 
 interface Props {
   status: RecordingStatus
-  canRecord: boolean
+  isStarting: boolean
   onStart: () => void
   onPause: () => void
   onResume: () => void
@@ -13,7 +13,7 @@ interface Props {
 
 export function RecorderControls({
   status,
-  canRecord,
+  isStarting,
   onStart,
   onPause,
   onResume,
@@ -21,9 +21,13 @@ export function RecorderControls({
 }: Props) {
   if (status === 'inactive') {
     return (
-      <Button onClick={onStart} disabled={!canRecord}>
-        <Circle className="size-4 fill-current text-red-500" />
-        Grabar
+      <Button onClick={onStart} disabled={isStarting}>
+        {isStarting ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Circle className="size-4 fill-current text-red-500" />
+        )}
+        {isStarting ? 'Esperando...' : 'Grabar'}
       </Button>
     )
   }

@@ -14,47 +14,48 @@ export function useMediaRecorder(
   const sourceRef = useRef<RecordingSource | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
-  const start = useCallback(() => {
-    if (!screenStream) return
+  // Recibe el stream como parámetro: nunca usa el estado de React,
+  // que todavía puede ser null justo después de compartir la pantalla
+  const start = useCallback(
+    (captured: MediaStream) => {
+      const source = createRecordingStream(captured, micStream)
+      sourceRef.current = source
 
-    // Video de la pantalla + audio mezclado (si hay)
-    const source = createRecordingStream(screenStream, micStream)
-    sourceRef.current = source
+      const mimeType = getSupportedMimeType()
+      const recorder = new MediaRecorder(source.stream, mimeType ? { mimeType } : undefined)
 
-    const mimeType = getSupportedMimeType()
-    const recorder = new MediaRecorder(source.stream, mimeType ? { mimeType } : undefined)
+      chunksRef.current = []
+      setRecordingBlob(null)
 
-    chunksRef.current = []
-    setRecordingBlob(null)
-
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunksRef.current.push(event.data)
-    }
-
-    recorder.onstop = async () => {
-      // Ya llegaron todos los fragmentos: liberamos el AudioContext
-      sourceRef.current?.close()
-      sourceRef.current = null
-
-      let blob = new Blob(chunksRef.current, { type: recorder.mimeType })
-
-      if (blob.type.includes('webm')) {
-        try {
-          blob = await fixWebmDuration(blob)
-        } catch {
-          // Si falla, usamos el blob original
-        }
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data)
       }
 
-      setRecordingBlob(blob)
-      setStatus('inactive')
-      recorderRef.current = null
-    }
+      recorder.onstop = async () => {
+        sourceRef.current?.close()
+        sourceRef.current = null
 
-    recorder.start(1000)
-    recorderRef.current = recorder
-    setStatus('recording')
-  }, [screenStream, micStream])
+        let blob = new Blob(chunksRef.current, { type: recorder.mimeType })
+
+        if (blob.type.includes('webm')) {
+          try {
+            blob = await fixWebmDuration(blob)
+          } catch {
+            // Si falla, usamos el blob original
+          }
+        }
+
+        setRecordingBlob(blob)
+        setStatus('inactive')
+        recorderRef.current = null
+      }
+
+      recorder.start(1000)
+      recorderRef.current = recorder
+      setStatus('recording')
+    },
+    [micStream],
+  )
 
   const pause = useCallback(() => {
     if (recorderRef.current?.state === 'recording') {
@@ -76,7 +77,9 @@ export function useMediaRecorder(
     }
   }, [])
 
-  // Si la pantalla deja de compartirse, cerramos la grabación
+  const clear = useCallback(() => setRecordingBlob(null), [])
+
+  // Si la pantalla deja de compartirse (por ejemplo desde el navegador), cerramos la grabación
   useEffect(() => {
     if (!screenStream) stop()
   }, [screenStream, stop])
@@ -90,5 +93,5 @@ export function useMediaRecorder(
     }
   }, [])
 
-  return { status, recordingBlob, start, pause, resume, stop }
+  return { status, recordingBlob, start, pause, resume, stop, clear }
 }
