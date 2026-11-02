@@ -72,7 +72,9 @@ export function AudioSettings({
       {microphone && (
         <Select
           value={deviceId || DEFAULT_DEVICE}
-          onValueChange={(value) => onDeviceChange(value === DEFAULT_DEVICE ? '' : value)}
+          onValueChange={(value) =>
+            onDeviceChange(!value || value === DEFAULT_DEVICE ? '' : value)
+          }
           disabled={microphoneLocked}
         >
           <SelectTrigger className="w-full">
