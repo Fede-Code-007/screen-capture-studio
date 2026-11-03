@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" fill="none">
+  <!-- Camera body -->
+  <rect x="18" y="34" width="72" height="60" rx="14" ry="14"
+        stroke="white" stroke-width="7.5" fill="none"/>
+  
+  <!-- Top bar detail -->
+  <line x1="38" y1="48" x2="70" y2="48" stroke="white" stroke-width="6.5" stroke-linecap="round"/>
+  
+  <!-- Left side dots -->
+  <circle cx="32" cy="58" r="3.5" fill="white"/>
+  <circle cx="32" cy="72" r="3.5" fill="white"/>
+  <circle cx="32" cy="86" r="3.5" fill="white"/>
+  
+  <!-- Lens triangle -->
+  <path d="M90 50 L116 36 L116 92 L90 78 Z"
+        stroke="white" stroke-width="7.5" stroke-linejoin="round" fill="none"/>
+</svg>
