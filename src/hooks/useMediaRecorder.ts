@@ -3,6 +3,7 @@ import fixWebmDuration from 'webm-duration-fix'
 import { createRecordingStream, type RecordingSource, type Volumes } from '@/services/audio.service'
 import { getSupportedMimeType } from '@/utils/getSupportedMimeType'
 import type { RecordingStatus } from '@/types/recorder.types'
+import { remuxToStandardMp4 } from '@/services/remux.service'
 
 export function useMediaRecorder(
   screenStream: MediaStream | null,
@@ -58,6 +59,12 @@ export function useMediaRecorder(
             blob = await fixWebmDuration(blob)
           } catch {
             // Si falla, usamos el blob original
+          }
+        } else if (blob.type.includes('mp4')) {
+          try {
+            blob = await remuxToStandardMp4(blob)
+          } catch {
+            // Si falla, usamos el blob original (se reproduce, pero sin poder adelantar en Windows)
           }
         }
 
